@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+<title>Form Keluh Kesah</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background: #f5f5f5;
+}
+
+.container {
+  max-width: 480px;
+  margin: auto;
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+h2, h3 { text-align: center; }
+
+label {
+  font-weight: bold;
+  margin-top: 12px;
+  display: block;
+}
+
+input, textarea {
+  width: 100%;
+  padding: 10px;
+  margin-top: 6px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+button {
+  padding: 6px 10px;
+  margin: 2px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button.submit-btn {
+  width: 100%;
+  background: #4CAF50;
+  color: white;
+  font-size: 17px;
+  padding: 14px;
+  margin-top: 20px;
+}
+
+button.submit-btn:hover { background: #45a049; }
+
+.menu-buttons {
+  display: flex;
+  gap: 5px;
+  margin-top: 30px;
+}
+
+.menu-buttons button {
+  flex: 1;
+  background: #0d6efd;
+  color:white;
+  font-size:14px;
+  padding:8px 0;
+}
+
+.menu-buttons button:hover {
+  background: #0a58ca;
+}
+
+.sort-buttons {
+  text-align: right;
+  margin: 10px 0;
+}
+
+.item {
+  background: #fff;
+  margin-top: 10px;
+  padding: 10px;
+  border-left: 4px solid #0d6efd;
+  border-radius: 6px;
+}
+
+.date {
+  font-size: 12px;
+  color: #666;
+}
+
+#msg {
+  text-align: center;
+  margin-top: 15px;
+  font-size: 16px;
+}
+
+#pagination button {
+  font-size: 12px;
+  padding: 5px 8px;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Form Keluh Kesah</h2>
+
+  <form id="form">
+    <input type="text" name="date" id="date" readonly>
+
+    <label>Dear</label>
+    <input type="text" name="dear" required>
+
+    <label>Keluh Kesah</label>
+    <textarea name="keluh" rows="3"></textarea>
+
+    <label>Kritik</label>
+    <textarea name="kritik" rows="3"></textarea>
+
+    <label>Saran</label>
+    <textarea name="saran" rows="3"></textarea>
+
+    <button type="submit" class="submit-btn">Kirim</button>
+  </form>
+
+  <p id="msg"></p>
+  <div class="menu-buttons">
+    <button onclick="showCategory('keluh')">Keluh Kesah</button>
+    <button onclick="showCategory('kritik')">Kritik</button>
+    <button onclick="showCategory('saran')">Saran</button>
+  </div>
+
+  <div class="sort-buttons">
+    <button onclick="sortData('desc')">Terbaru → Lama</button>
+    <button onclick="sortData('asc')">Lama → Terbaru</button>
+  </div>
+
+  <div id="list"></div>
+  <div id="pagination" style="margin-top:10px; text-align:center;"></div>
+</div>
+
+<script>
+document.getElementById("date").value = new Date().toISOString().slice(0, 10);
+
+const API_URL = "https://script.google.com/macros/s/AKfycbzezBB1V50wcAH0A5jK0L4-lSVMWhpTjg1V5qNMHy7dCaz7fbzUJE17848XkLwf0udf/exec";
+let sheetData = [];
+let currentPage = 1;
+const perPage = 5;
+
+// =========================
+// LOAD DATA (skip header baris pertama)
+async function loadData() {
+  const res = await fetch(API_URL);
+  const json = await res.json();
+
+  // skip header baris pertama
+  const dataOnly = json.slice(1);
+
+  // sort default terbaru ke lama
+  dataOnly.sort((a,b)=> new Date(b[0]) - new Date(a[0]));
+
+  sheetData = dataOnly;
+
+  // otomatis tampil keluh kesah
+  currentPage = 1;
+  showCategory("keluh");
+}
+loadData();
+
+// =========================
+// FORMAT TANGGAL
+function formatDateIndo(dateStr) {
+  if(!dateStr) return "-";
+  const d = new Date(dateStr);
+  if(isNaN(d)) return "-";
+  const bulan = ["Januari","Februari","Maret","April","Mei","Juni",
+                 "Juli","Agustus","September","Oktober","November","Desember"];
+  return d.getDate() + " " + bulan[d.getMonth()] + " " + d.getFullYear();
+}
+
+// =========================
+// SUBMIT FORM
+document.getElementById("form").addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  const msg = document.getElementById("msg");
+  msg.innerHTML = "Mengirim...";
+  msg.style.color = "#333";
+
+  const formData = new FormData(e.target);
+
+  try{
+    const res = await fetch(API_URL,{method:"POST", body:formData});
+    const text = await res.text();
+
+    if(text==="OK"){
+      msg.style.color="green";
+      msg.innerHTML="✔ Data berhasil dikirim!";
+
+      const newData = [
+        formData.get("date"),
+        formData.get("dear"),
+        formData.get("keluh"),
+        formData.get("kritik"),
+        formData.get("saran")
+      ];
+
+      sheetData.unshift(newData); // data baru paling atas
+
+      e.target.reset();
+      document.getElementById("date").value = new Date().toISOString().slice(0,10);
+
+      if(window.lastCategory){
+        currentPage = 1;
+        showCategory(window.lastCategory);
+      }
+
+    }else{
+      msg.style.color="red";
+      msg.innerHTML="❌ Gagal mengirim: "+text;
+    }
+
+  }catch(err){
+    msg.style.color="red";
+    msg.innerHTML="❌ ERROR: "+err;
+  }
+});
+
+// =========================
+// SORTING
+function sortData(order){
+  if(order==='desc'){
+    sheetData.sort((a,b)=> new Date(b[0]) - new Date(a[0]));
+  }else{
+    sheetData.sort((a,b)=> new Date(a[0]) - new Date(b[0]));
+  }
+  currentPage = 1;
+  if(window.lastCategory) showCategory(window.lastCategory);
+}
+
+// =========================
+// PAGINATION
+function renderPagination(totalPages){
+  const pagination = document.getElementById("pagination");
+  pagination.innerHTML="";
+
+  if(totalPages<=1) return;
+
+  if(currentPage>1){
+    pagination.innerHTML+=`<button onclick="gotoPage(${currentPage-1})">Prev</button>`;
+  }
+
+  for(let i=1;i<=totalPages;i++){
+    pagination.innerHTML+=`<button onclick="gotoPage(${i})" style="${i===currentPage?'background:#0d6efd;color:white;':''}">${i}</button>`;
+  }
+
+  if(currentPage<totalPages){
+    pagination.innerHTML+=`<button onclick="gotoPage(${currentPage+1})">Next</button>`;
+  }
+}
+
+function gotoPage(page){
+  currentPage=page;
+  showCategory(window.lastCategory);
+}
+
+// =========================
+// SHOW CATEGORY
+function showCategory(cat){
+  window.lastCategory=cat;
+
+  const list=document.getElementById("list");
+  const pagination=document.getElementById("pagination");
+
+  list.innerHTML="<p>Memuat data...</p>";
+  pagination.innerHTML="";
+
+  setTimeout(()=>{
+    list.innerHTML="";
+
+    const filtered = sheetData.filter(row=>{
+      const field = cat==="keluh"?row[2]:cat==="kritik"?row[3]:row[4];
+      return field && field.trim()!=="";
+    });
+
+    const totalPages = Math.ceil(filtered.length/perPage);
+    const start = (currentPage-1)*perPage;
+    const end = start+perPage;
+    const pageItems = filtered.slice(start,end);
+
+    pageItems.forEach(row=>{
+      const field = cat==="keluh"?row[2]:cat==="kritik"?row[3]:row[4];
+      list.innerHTML+=`
+        <div class="item">
+          <div><strong>To ${row[1]},</strong></div>
+          <div class="date">${formatDateIndo(row[0])}</div>
+          <div style="margin-top:6px;">${field}</div>
+        </div>
+      `;
+    });
+
+    if(pageItems.length===0){
+      list.innerHTML="<p>Tidak ada data.</p>";
+    }
+
+    renderPagination(totalPages);
+
+  },100);
+}
+</script>
+
+</body>
+</html>
